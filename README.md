@@ -88,3 +88,5 @@ Manual equivalent:
 python -m pip install pyinstaller lz4 cryptography
 python -m PyInstaller --onefile --console --name gta6_save_tool --hidden-import lz4.block --collect-submodules cryptography gta6_save_tool.py
 ```
+
+Thanks to [@earthonion](https://github.com/earthonion) for the checksum fixes.
