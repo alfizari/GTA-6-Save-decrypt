@@ -1,26 +1,39 @@
 @echo off
-REM Build the tiny GTA VI tag helper (DLL + CLI exe) with Visual Studio's x64 compiler.
-REM Just double-click or run this from any command prompt. Keep gta6_tag_blob.bin
-REM next to the resulting gta6_tag.dll / gta6_tag.exe.
+REM Build a standalone gta6_save_tool.exe with PyInstaller.
+REM   build.bat          -> console exe (GUI on double-click, CLI with arguments)
+REM   build.bat nocon    -> windowed exe (GUI only, no console window; CLI output is hidden)
+REM Result: dist\gta6_save_tool.exe
 setlocal
 cd /d "%~dp0"
 
-set "VCV="
-REM Prefer vswhere to locate the x64 build tools, fall back to the known path.
-for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -find "VC\Auxiliary\Build\vcvars64.bat" 2^>nul`) do set "VCV=%%i"
-if not defined VCV if exist "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat" set "VCV=C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-if not defined VCV if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" set "VCV=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
-
-if defined VCV (
-  call "%VCV%"
-) else (
-  echo Could not find vcvars64.bat. Open an "x64 Native Tools Command Prompt for VS" and run: build_helper.bat
+set "PY=python"
+where %PY% >nul 2>nul || set "PY=py"
+where %PY% >nul 2>nul || (
+  echo Python was not found on PATH. Install Python 3.8+ from python.org and try again.
+  goto :fail
 )
 
-echo === Building gta6_tag.dll ===
-cl /nologo /O2 /LD gta6_tag.c /Fe:gta6_tag.dll
-echo === Building gta6_tag.exe (CLI) ===
-cl /nologo /O2 /DBUILD_EXE gta6_tag.c /Fe:gta6_tag.exe
+echo === Installing / updating build dependencies ===
+%PY% -m pip install --upgrade pyinstaller lz4 cryptography || goto :fail
+
+set "MODE=--console"
+if /i "%~1"=="nocon" set "MODE=--windowed"
+
+echo === Building gta6_save_tool.exe (%MODE%) ===
+%PY% -m PyInstaller --noconfirm --clean --onefile %MODE% ^
+  --name gta6_save_tool ^
+  --hidden-import lz4.block ^
+  --collect-submodules cryptography ^
+  gta6_save_tool.py || goto :fail
+
 echo.
-echo Done. Keep gta6_tag_blob.bin next to gta6_tag.dll / gta6_tag.exe.
+echo Done: %~dp0dist\gta6_save_tool.exe
 endlocal
+exit /b 0
+
+:fail
+echo.
+echo Build FAILED.
+endlocal
+pause
+exit /b 1

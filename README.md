@@ -1,49 +1,32 @@
 # GTA VI Save Tool
 
-The tag is not calculated so it will corrupt the save file, will fix it soon
-
 Decrypt, edit, and re-encrypt GTA VI save files (SARC / ASAV v1, storage mode 3).
 
 ## What it does
 
 - **Decrypt**: SARC save file -> JSON body (+ optional raw JSAV dump)
 - **Encrypt**: Edited JSON body (or JSAV binary) + original SARC as template -> new SARC save file
-- Handles the full pipeline: AES-CTR decryption, LZ4 decompression, JSAV parsing, header checksum, and trailing authentication tag
+- Handles the full pipeline: AES-256-CTR, PKCS#7 padding, LZ4, JSAV parsing, header checksum, and the 32-byte integrity trailer (all in pure Python)
 
 ## Requirements
 
-- **Python 3.8+**
-- **lz4** (optional but recommended for faster compression):
-  ```
-  pip install lz4
-  ```
-- **Tag generation** (one of):
-  - `gta6_tag.dll` + `gta6_tag_blob.bin` (small standalone helper, recommended)
-  - Or the full game executable (120+ MB, not recommended)
+- **Python 3.8+** (the tool runs on the standard library alone)
+- **lz4** (optional, faster compression): `pip install lz4`
+- **cryptography** (optional, faster AES): `pip install cryptography`
+
+No DLL, C helper, lookup blob, or game exe is needed. All cipher tables, the LZ4 codec, and the integrity trailer are implemented directly in `gta6_save_tool.py`.
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `gta6_save_tool.py` | Main tool (GUI + CLI) — self-contained cipher tables |
-| `gta6_tag.dll` | Standalone tag/signing helper (~1 MB) |
-| `gta6_tag_blob.bin` | Lookup tables used by the DLL |
-| `gta6_tag.c` | C source for the DLL (if you want to rebuild) |
-| `build_helper.bat` | Build script for the DLL (requires MSVC) |
+| `gta6_save_tool.py` | The whole tool (GUI + CLI), pure Python |
+| `build.bat` | Builds a standalone `gta6_save_tool.exe` with PyInstaller |
 
 ## Setup
 
-1. Place these files in the same folder:
-   - `gta6_save_tool.py`
-   - `gta6_tag.dll`
-   - `gta6_tag_blob.bin`
-
-2. Install the optional lz4 package:
-   ```
-   pip install lz4
-   ```
-
-3. That's it. No other dependencies needed — cipher tables are embedded in the Python script.
+1. Copy `gta6_save_tool.py` anywhere.
+2. Optionally install the speed-ups: `pip install lz4 cryptography`
 
 ## Usage
 
@@ -80,15 +63,28 @@ Arguments for encrypt:
 4. The tool automatically recomputes the LZ4 compression, AES-CTR encryption, header checksum, and authentication tag
 5. Replace the save file and load in-game
 
-## Rebuilding the DLL from source
+## Building a standalone exe
 
-Requires Visual Studio with C++ build tools (MSVC x64).
+`build.bat` packages the tool into a single `gta6_save_tool.exe` with PyInstaller, so it can run on a PC without Python installed.
 
-**Option A** — double-click `build_helper.bat`
+1. Install Python 3.8+ and make sure `python` (or `py`) is on PATH.
+2. Double-click `build.bat`, or run it from a command prompt in the tool's folder:
+   ```
+   build.bat
+   ```
+   It installs/updates `pyinstaller`, `lz4` and `cryptography`, then builds.
+3. The exe is written to `dist\gta6_save_tool.exe`.
 
-**Option B** — from an x64 Native Tools Command Prompt:
+The default build is a console exe: double-clicking it opens the GUI, and it also accepts the same CLI arguments:
 ```
-cl /nologo /O2 /LD gta6_tag.c /Fe:gta6_tag.dll
+gta6_save_tool.exe decrypt SARC0003 output.json
+gta6_save_tool.exe encrypt body.json SARC0003_original SARC0003_new
 ```
 
-Keep `gta6_tag_blob.bin` in the same directory as the built DLL.
+For a GUI-only exe without the console window, run `build.bat nocon`. That build cannot show CLI output, so use the default build for command-line use.
+
+Manual equivalent:
+```
+python -m pip install pyinstaller lz4 cryptography
+python -m PyInstaller --onefile --console --name gta6_save_tool --hidden-import lz4.block --collect-submodules cryptography gta6_save_tool.py
+```
